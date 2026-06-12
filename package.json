@@ -1,0 +1,16 @@
+{
+  "name": "supermemory-local-kit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ollama + Supermemory 셀프호스팅 + Claude Code 플러그인 + 관리 UI 원스톱 키트",
+  "type": "module",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "npm --prefix web run dev",
+    "build": "npm --prefix web run build",
+    "server:status": "curl -s http://localhost:6767/v3/health && echo ' OK' || echo 'DOWN'",
+    "server:restart": "launchctl kickstart -k gui/$(id -u)/com.supermemory.local 2>/dev/null || launchctl kickstart -k gui/$(id -u)/com.adanbae.supermemory.local",
+    "server:stop": "launchctl bootout gui/$(id -u)/com.supermemory.local 2>/dev/null; launchctl bootout gui/$(id -u)/com.adanbae.supermemory.local 2>/dev/null; true"
+  },
+  "engines": { "node": ">=18" }
+}

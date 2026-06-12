@@ -1,0 +1,128 @@
+# Supermemory 로컬 셋업
+
+Ollama + Supermemory 셀프호스팅으로 구축한 **로컬 AI 메모리 서버**.
+데이터가 로컬 밖으로 나가지 않으며(외부 전송 0), 비용 $0, 회사 보안 정책에 적합.
+
+> 상태: ✅ 설치·동작 검증 완료 (2026-06-12) · 남은 작업은 Claude Code 플러그인 연결 1단계
+
+---
+
+## 구성
+
+```
+[Ollama] gpt-oss:20b (메모리 추출용)
+    ↓ localhost:11434/v1
+[Supermemory Server]  ← 임베딩은 서버 내장 로컬 엔진(bge-base-en-v1.5)
+    ↓ localhost:6767 (REST API, 암호화 로컬 저장)
+[claude-supermemory 공식 플러그인]
+    ↓
+[Claude Code]
+```
+
+| 항목 | 값 |
+|------|-----|
+| 서버 | `~/.local/bin/supermemory-server` 0.0.2 |
+| 데이터 | `~/.supermemory-data` (암호화 로컬 저장) |
+| API URL | `http://localhost:6767` |
+| 추출 모델 | Ollama `gpt-oss:20b` |
+| 임베딩 | 서버 내장 `Xenova/bge-base-en-v1.5` (별도 모델 불필요) |
+| 자동 기동 | launchd `com.adanbae.supermemory.local` (로그인 시 + 크래시 재시작) |
+
+---
+
+## 빠른 시작
+
+### 서버 (이미 설치·기동됨)
+
+서버는 launchd로 자동 기동되므로 평소엔 별도 실행이 필요 없다.
+
+```bash
+# 상태 확인
+launchctl list | grep supermemory        # Status 0 = 정상
+curl http://localhost:6767/v3/health
+
+# 수동 재시작 / 중지
+launchctl kickstart -k gui/$(id -u)/com.adanbae.supermemory.local
+launchctl unload ~/Library/LaunchAgents/com.adanbae.supermemory.local.plist
+
+# 로그
+tail -f ~/Library/Logs/supermemory.out.log
+```
+
+### Claude Code 연결 (남은 1단계)
+
+인터랙티브 Claude Code 세션에서:
+
+```
+/plugin marketplace add supermemoryai/claude-supermemory
+/plugin install claude-supermemory
+```
+
+→ 설치 후 **새 터미널**에서 Claude Code 재시작. `~/.zshrc`의
+`SUPERMEMORY_API_URL`(`http://localhost:6767`)과 `SUPERMEMORY_CC_API_KEY`를
+플러그인이 자동으로 읽어 로컬 서버에 연결한다.
+
+플러그인 동작: 세션 시작 시 관련 메모리 자동 주입 + Edit/Write/Bash/Task 사용 내역 자동 캡처.
+
+---
+
+## REST API 직접 사용 (플러그인 없이)
+
+```bash
+# 저장
+curl -X POST http://localhost:6767/v3/documents \
+  -H "Content-Type: application/json" \
+  -d '{"content":"기억할 내용"}'
+
+# 검색
+curl -X POST http://localhost:6767/v3/search \
+  -H "Content-Type: application/json" \
+  -d '{"q":"검색어"}'
+```
+
+localhost 요청에는 서버 API 키가 자동 적용된다.
+
+---
+
+## 보안
+
+- **모든 데이터가 로컬에 암호화 저장**되며 외부로 전송되지 않는다 (Ollama 추출 사용 시).
+- 추출 모델을 상용 LLM API(OpenAI/Anthropic/Gemini/Groq)로 바꾸면 **메모리 원문이 해당 제공자로 전송**된다 → `docs/04-llm-provider-security.md` 참고.
+- 여러 제공자를 동시에 설정할 수 없다(우선순위 첫 번째만 사용). 전환은 서버 재시작.
+
+---
+
+## 문서
+
+| 파일 | 내용 |
+|------|------|
+| [`handoff.md`](./handoff.md) | 셋업 진행상황·실측 결과·운영 명령 |
+| [`docs/01-supermemory-overview.md`](./docs/01-supermemory-overview.md) | 서비스 개요·가격·보안 |
+| [`docs/02-free-mcp-setup.md`](./docs/02-free-mcp-setup.md) | Free 플랜(호스티드) MCP 연결 |
+| [`docs/03-local-setup.md`](./docs/03-local-setup.md) | Ollama + 셀프호스팅 전체 설치 가이드 |
+| [`docs/04-llm-provider-security.md`](./docs/04-llm-provider-security.md) | 상용 LLM API 데이터 유출 분석 |
+
+## 참고 링크
+
+- 셀프호스팅 문서: https://supermemory.ai/docs/self-hosting/overview
+- 플러그인: https://github.com/supermemoryai/claude-supermemory
+- 본체 (MIT): https://github.com/supermemoryai/supermemory
+
+---
+
+## 🚀 원스톱 설치 (이 저장소를 공유받았다면)
+
+요구사항: macOS 14+, [Homebrew](https://brew.sh), Node 18+, (플러그인은 Claude Code 필요)
+
+```bash
+git clone <이_저장소_URL> supermemory && cd supermemory
+npm run setup        # Ollama → 모델 → 서버 → launchd → API키 → 플러그인 → UI 의존성까지 전부
+npm run dev          # 관리 UI → http://localhost:5173
+```
+
+- 가벼운 모델로 설치: `SM_MODEL=qwen3:8b npm run setup`
+- 서버 상태/재시작/정지: `npm run server:status` / `server:restart` / `server:stop`
+- 멱등 스크립트 — 이미 완료된 단계는 건너뛰므로 재실행 안전
+
+### 관리 UI 기능
+**문서** 탭: 목록·페이지네이션·다중선택 일괄삭제·의미검색·추가·파일 업로드·본문 편집·청크 보기·JSON 내보내기·처리중 자동갱신 / **메모리** 탭: LLM이 추출한 기억 항목 열람·삭제 / **프로필** 탭: 자동 구축된 사용자 프로필(static/dynamic) / **태그** 탭: 이름변경·삭제·병합 / **서버 제어**: 시작·정지·재시작 (launchd)

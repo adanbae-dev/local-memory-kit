@@ -1,0 +1,168 @@
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --border: #262b35;
+  --fg: #e6e8ec;
+  --muted: #8b93a1;
+  --accent: #5b8cff;
+  --danger: #ff5b6e;
+  --ok: #3ad29f;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.app { max-width: 920px; margin: 0 auto; padding: 24px 16px 80px; }
+
+header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 15px; margin: 0 0 12px; color: var(--fg); }
+
+.tagbox { display: flex; align-items: center; gap: 8px; }
+.tagbox label { color: var(--muted); font-size: 12px; }
+.tagbox input { width: 200px; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+input, textarea {
+  background: #0e1015;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+}
+input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+textarea { width: 100%; resize: vertical; }
+
+button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: default; }
+button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+button.del { background: transparent; color: var(--danger); border: 1px solid var(--border); padding: 4px 10px; font-weight: 500; }
+button.del.wide { width: 100%; margin-top: 16px; padding: 10px; }
+
+.addform { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+.addform textarea { width: 100%; }
+.searchbar { display: flex; gap: 8px; }
+.searchbar input { flex: 1; }
+
+.results { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.result { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.result-head { display: flex; justify-content: space-between; gap: 8px; }
+.score { color: var(--ok); font-variant-numeric: tabular-nums; font-size: 12px; }
+.snippet { margin: 6px 0 0; color: var(--muted); }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 500; font-size: 12px; }
+.row { cursor: pointer; }
+.row:hover { background: #1d212a; }
+td.title { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.status { font-size: 11px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border); }
+.status-queued { color: #ffc861; }
+.status-done, .status-completed { color: var(--ok); }
+.status-failed { color: var(--danger); }
+
+.muted { color: var(--muted); }
+.mono, .content { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.error {
+  background: rgba(255, 91, 110, 0.1);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 16px;
+}
+
+.drawer-backdrop {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5);
+  display: flex; justify-content: flex-end;
+}
+.drawer {
+  width: min(460px, 92vw); height: 100%; overflow-y: auto;
+  background: var(--panel); border-left: 1px solid var(--border); padding: 20px;
+}
+.drawer-head { display: flex; justify-content: space-between; align-items: center; }
+.drawer-head h3 { margin: 0; font-size: 16px; }
+.drawer dl { display: grid; grid-template-columns: 92px 1fr; gap: 8px 12px; margin-top: 16px; }
+.drawer dt { color: var(--muted); font-size: 12px; }
+.drawer dd { margin: 0; word-break: break-word; }
+.drawer dd.content { grid-column: 1 / -1; background: #0e1015; padding: 10px; border-radius: 8px; white-space: pre-wrap; }
+
+/* 서버 제어 패널 */
+.server-head { display: flex; align-items: center; gap: 8px; }
+.server-head h2 { margin: 0 8px 0 0; }
+.server-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.warnbtn { background: #c9851f; }
+.dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; }
+.dot-ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.dot-warn { background: #ffc861; }
+.dot-down { background: var(--muted); }
+.dot-unknown { background: #555; }
+.error.small { font-size: 12px; padding: 8px 10px; margin-top: 10px; }
+
+/* 태그 셀렉트 */
+select {
+  background: #0e1015;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  max-width: 320px;
+}
+select:focus { outline: none; border-color: var(--accent); }
+
+/* 탭 */
+.tabs { display: flex; gap: 4px; margin-top: 16px; border-bottom: 1px solid var(--border); }
+.tabs button {
+  background: transparent; color: var(--muted); border: none; border-radius: 8px 8px 0 0;
+  padding: 9px 16px; font-weight: 500;
+}
+.tabs button.active { color: var(--fg); background: var(--panel); border: 1px solid var(--border); border-bottom-color: var(--panel); margin-bottom: -1px; }
+
+/* 체크박스/벌크 */
+td.chk, th.chk { width: 30px; text-align: center; }
+.bulkbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+
+/* 페이지네이션 */
+.pager { display: flex; align-items: center; gap: 10px; justify-content: flex-end; margin-top: 12px; }
+.pager button { padding: 5px 11px; }
+
+/* 프로필 */
+.profile-list { margin: 8px 0 0; padding-left: 18px; }
+.profile-list li { margin: 5px 0; }
+
+/* 업로드/내보내기 */
+.toolrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.filelabel { color: var(--muted); font-size: 12px; }
+
+/* 청크 */
+.chunk { background: #0e1015; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: 13px; white-space: pre-wrap; }
+
+/* 태그 관리 */
+.tagrow { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.tagrow .mono { font-size: 12px; }
+.spin { color: var(--muted); font-size: 12px; }

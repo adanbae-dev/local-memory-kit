@@ -24,6 +24,9 @@ import {
   serverStatus,
   updateDocument,
   uploadFile,
+  listSessions,
+  getSession,
+  importSessions,
   type Chunk,
   type MemoryEntry,
   type Pagination,
@@ -32,6 +35,8 @@ import {
   type ServerStatus,
   type SmDocument,
   type TagInfo,
+  type SessionMeta,
+  type SessionDetail,
 } from "./api";
 
 const DEFAULT_TAG = "sm_project_default";
@@ -786,8 +791,144 @@ function InsightsTab({ tag }: { tag: string }) {
   );
 }
 
+/* ───────────────────────── 이전 세션 탭 ───────────────────────── */
+function SessionsTab({ projectMap }: { projectMap: ProjectMap }) {
+  const [sessions, setSessions] = useState<SessionMeta[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [projFilter, setProjFilter] = useState("");
+  const [hideImported, setHideImported] = useState(false);
+  const [summarize, setSummarize] = useState(true);
+  const [preview, setPreview] = useState<{ meta: SessionMeta; detail: SessionDetail | null } | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setSessions(await listSessions());
+      setChecked(new Set());
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const projects = [...new Set(sessions.map((s) => s.project))].sort();
+  const shown = sessions.filter((s) => (!projFilter || s.project === projFilter) && (!hideImported || !s.imported));
+
+  function toggle(id: string) {
+    setChecked((c) => {
+      const n = new Set(c);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+  async function openPreview(s: SessionMeta) {
+    setPreview({ meta: s, detail: null });
+    try {
+      setPreview({ meta: s, detail: await getSession(s.file) });
+    } catch (e) {
+      setError(errMsg(e));
+      setPreview(null);
+    }
+  }
+  async function doImport() {
+    const files = shown.filter((s) => checked.has(s.sessionId)).map((s) => s.file);
+    if (files.length === 0) return;
+    if (!confirm(`${files.length}개 세션을 메모리로 가져옵니다.${summarize ? " (로컬 요약 — 건당 다소 소요)" : ""} 진행할까요?`)) return;
+    setImporting(true);
+    setError(null);
+    setResult(null);
+    try {
+      const { results } = await importSessions(files, summarize);
+      const ok = results.filter((r) => r.ok).length;
+      const fail = results.filter((r) => !r.ok);
+      setResult(`완료: ${ok}/${results.length} 성공` + (fail.length ? ` · 실패: ${fail.map((r) => r.error).join(", ")}` : ""));
+      load();
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  void projectMap; // 폴더 라벨 확장 여지(현재는 project=basename(cwd) 사용)
+
+  return (
+    <section className="panel">
+      <h2>이전 세션 <span className="muted">({shown.length}/{sessions.length})</span></h2>
+      <p className="muted">과거 Claude Code 세션(~/.claude/projects)을 골라 메모리로 가져옵니다. 정제(+로컬 요약)되어 적재되며 외부 전송은 없습니다.</p>
+      {error && <div className="error small">⚠ {error}</div>}
+      {result && <div className="muted" style={{ marginBottom: 8 }}>{result}</div>}
+      <div className="toolrow" style={{ marginBottom: 10 }}>
+        <select value={projFilter} onChange={(e) => setProjFilter(e.target.value)}>
+          <option value="">전체 프로젝트</option>
+          {projects.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <label className="muted"><input type="checkbox" checked={hideImported} onChange={(e) => setHideImported(e.target.checked)} /> 가져온 항목 숨기기</label>
+        <label className="muted"><input type="checkbox" checked={summarize} onChange={(e) => setSummarize(e.target.checked)} /> 로컬 요약</label>
+        <button onClick={doImport} disabled={importing || checked.size === 0}>{importing ? "가져오는 중…" : `선택 가져오기 (${checked.size})`}</button>
+        <button className="ghost" onClick={load} disabled={loading}>{loading ? "불러오는 중…" : "새로고침"}</button>
+      </div>
+      {loading && sessions.length === 0 ? (
+        <p className="muted">불러오는 중… (최초 스캔은 수 초 걸릴 수 있음)</p>
+      ) : shown.length === 0 ? (
+        <p className="muted">세션이 없습니다.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr><th className="chk"></th><th>프로젝트</th><th>제목</th><th>메시지</th><th>날짜</th><th>상태</th></tr>
+          </thead>
+          <tbody>
+            {shown.map((s) => (
+              <tr key={s.sessionId} className="row" onClick={() => openPreview(s)}>
+                <td className="chk" onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" checked={checked.has(s.sessionId)} onChange={() => toggle(s.sessionId)} />
+                </td>
+                <td>{s.project}</td>
+                <td className="title">{s.title}</td>
+                <td className="muted">{s.userCount}/{s.assistantCount}</td>
+                <td className="muted">{s.mtime ? new Date(s.mtime).toLocaleDateString("ko-KR") : "—"}</td>
+                <td>{s.imported ? <span className="status status-done">가져옴</span> : ""}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {preview && (
+        <div className="drawer-backdrop" onClick={() => setPreview(null)}>
+          <aside className="drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="drawer-head">
+              <h3>{preview.meta.title}</h3>
+              <button className="ghost" onClick={() => setPreview(null)}>✕</button>
+            </div>
+            <dl>
+              <dt>프로젝트</dt><dd>{preview.meta.project}</dd>
+              <dt>cwd</dt><dd className="mono">{preview.meta.cwd || "—"}</dd>
+              <dt>메시지</dt><dd>user {preview.meta.userCount} / assistant {preview.meta.assistantCount}</dd>
+            </dl>
+            <h3 style={{ marginTop: 16 }}>정제 본문 미리보기</h3>
+            {!preview.detail ? (
+              <p className="spin">불러오는 중…</p>
+            ) : (
+              <div className="content" style={{ whiteSpace: "pre-wrap", maxHeight: "60vh", overflow: "auto" }}>
+                {preview.detail.text.slice(0, 8000) || "(내용 없음)"}
+              </div>
+            )}
+          </aside>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /* ───────────────────────── 루트 ───────────────────────── */
-type Tab = "docs" | "memories" | "profile" | "tags" | "insights";
+type Tab = "docs" | "memories" | "profile" | "tags" | "insights" | "sessions";
 
 export function App() {
   const [tab, setTab] = useState<Tab>("docs");
@@ -898,6 +1039,7 @@ export function App() {
         <button className={tab === "memories" ? "active" : ""} onClick={() => setTab("memories")}>메모리</button>
         <button className={tab === "profile" ? "active" : ""} onClick={() => setTab("profile")}>프로필</button>
         <button className={tab === "insights" ? "active" : ""} onClick={() => setTab("insights")}>인사이트</button>
+        <button className={tab === "sessions" ? "active" : ""} onClick={() => setTab("sessions")}>이전 세션</button>
         <button className={tab === "tags" ? "active" : ""} onClick={() => setTab("tags")}>태그</button>
       </nav>
 
@@ -905,6 +1047,7 @@ export function App() {
       {tab === "memories" && <MemoriesTab tag={tag} />}
       {tab === "profile" && <ProfileTab tag={tag} />}
       {tab === "insights" && <InsightsTab tag={tag} />}
+      {tab === "sessions" && <SessionsTab projectMap={projectMap} />}
       {tab === "tags" && <TagsTab tags={tags} projectMap={projectMap} onTagsChanged={loadTags} />}
     </div>
   );

@@ -247,3 +247,53 @@ export function mergeTags(sourceTag: string, targetTag: string): Promise<{ succe
     body: JSON.stringify({ containerTags: [sourceTag, targetTag], targetContainerTag: targetTag }),
   });
 }
+
+// ════════ 이전 세션 백필 (Vite 미들웨어 /admin/sessions/*) ════════
+export interface SessionMeta {
+  file: string;
+  sessionId: string;
+  cwd: string;
+  project: string;
+  title: string;
+  userCount: number;
+  assistantCount: number;
+  mtime: number;
+  imported: boolean;
+}
+export interface SessionDetail {
+  cwd: string;
+  title: string;
+  text: string;
+  userCount: number;
+  assistantCount: number;
+}
+export interface ImportResult {
+  sessionId: string;
+  ok: boolean;
+  containerTag?: string;
+  error?: string;
+}
+
+export async function listSessions(): Promise<SessionMeta[]> {
+  const r = await fetch("/admin/sessions/list");
+  if (!r.ok) throw new Error(`세션 목록 실패 ${r.status}`);
+  return r.json();
+}
+export async function getSession(file: string): Promise<SessionDetail> {
+  const r = await fetch(`/admin/sessions/get?file=${encodeURIComponent(file)}`);
+  if (!r.ok) throw new Error(`세션 로드 실패 ${r.status}`);
+  return r.json();
+}
+export async function importSessions(
+  files: string[],
+  summarize: boolean,
+  containerTag?: string
+): Promise<{ results: ImportResult[] }> {
+  const r = await fetch("/admin/sessions/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ files, summarize, containerTag }),
+  });
+  if (!r.ok) throw new Error(`가져오기 실패 ${r.status}`);
+  return r.json();
+}

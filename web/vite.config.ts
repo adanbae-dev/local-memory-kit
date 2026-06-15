@@ -3,9 +3,9 @@ import react from "@vitejs/plugin-react";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 
 const pexec = promisify(exec);
 
@@ -197,8 +197,219 @@ function projectsScan(): Plugin {
   };
 }
 
+// ─── 이전 세션 백필 (~/.claude/projects/*/*.jsonl → supermemory) ───
+const PROJECTS_DIR = join(homedir(), ".claude", "projects");
+const IMPORT_MARKER = join(
+  process.env.SUPERMEMORY_DATA_DIR || join(homedir(), ".supermemory-data"),
+  "imported-sessions.json"
+);
+
+function readImported(): Set<string> {
+  try {
+    return new Set(JSON.parse(readFileSync(IMPORT_MARKER, "utf8")) as string[]);
+  } catch {
+    return new Set();
+  }
+}
+function markImported(ids: string[]): void {
+  const s = readImported();
+  for (const id of ids) s.add(id);
+  try {
+    writeFileSync(IMPORT_MARKER, JSON.stringify([...s]));
+  } catch {
+    /* 마커 저장 실패 무시 */
+  }
+}
+
+function sanitizeSession(t: string): string {
+  return t
+    .replace(/<\|[^|]*\|>/g, " ")
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function blockText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content))
+    return content.map((b) => (typeof b === "string" ? b : (b && (b as { text?: string }).text) || "")).join(" ");
+  return "";
+}
+
+interface SessParse { cwd: string; title: string; userCount: number; assistantCount: number; text: string; }
+function parseSession(file: string, full: boolean): SessParse | null {
+  let raw: string;
+  try {
+    raw = readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+  let cwd = "";
+  let title = "";
+  let uc = 0;
+  let ac = 0;
+  const parts: string[] = [];
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    let o: Record<string, unknown>;
+    try {
+      o = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!cwd && typeof o.cwd === "string") cwd = o.cwd;
+    const msg = o.message as { role?: string; content?: unknown } | undefined;
+    if (!title && o.type === "ai-title") title = String((o.title as string) || (msg?.content as string) || "").slice(0, 120);
+    const role = o.type === "user" || o.type === "assistant" ? o.type : msg?.role;
+    if (role === "user") {
+      uc++;
+      if (full) { const tx = blockText(msg?.content ?? o.content); if (tx.trim()) parts.push("[사용자] " + tx); }
+    } else if (role === "assistant") {
+      ac++;
+      if (full) { const tx = blockText(msg?.content ?? o.content); if (tx.trim()) parts.push("[어시스턴트] " + tx); }
+    }
+  }
+  if (!title) title = (full && parts[0] ? parts[0] : basename(file)).slice(0, 120);
+  return { cwd, title, userCount: uc, assistantCount: ac, text: full ? sanitizeSession(parts.join("\n\n")) : "" };
+}
+
+interface SessRow { file: string; sessionId: string; cwd: string; project: string; title: string; userCount: number; assistantCount: number; mtime: number; imported: boolean; }
+let sessCache: { at: number; list: SessRow[] } | null = null;
+function listSessionRows(): SessRow[] {
+  if (sessCache && Date.now() - sessCache.at < 60_000) return sessCache.list;
+  const imported = readImported();
+  const out: SessRow[] = [];
+  let projects: string[];
+  try {
+    projects = readdirSync(PROJECTS_DIR);
+  } catch {
+    return [];
+  }
+  for (const p of projects) {
+    let files: string[];
+    try {
+      files = readdirSync(join(PROJECTS_DIR, p)).filter((f) => f.endsWith(".jsonl"));
+    } catch {
+      continue;
+    }
+    for (const f of files) {
+      const file = join(PROJECTS_DIR, p, f);
+      const meta = parseSession(file, false);
+      if (!meta) continue;
+      const sessionId = f.replace(/\.jsonl$/, "");
+      let mtime = 0;
+      try { mtime = statSync(file).mtimeMs; } catch { /* */ }
+      out.push({
+        file, sessionId, cwd: meta.cwd,
+        project: meta.cwd ? basename(meta.cwd) : p,
+        title: meta.title, userCount: meta.userCount, assistantCount: meta.assistantCount,
+        mtime, imported: imported.has(sessionId),
+      });
+    }
+  }
+  out.sort((a, b) => b.mtime - a.mtime);
+  sessCache = { at: Date.now(), list: out };
+  return out;
+}
+
+async function ollamaSummarize(text: string): Promise<string> {
+  const model = process.env.OPENAI_MODEL || "gemma4:e4b";
+  const r = await fetch("http://localhost:11434/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: "다음 Claude Code 세션 로그에서 장기적으로 기억할 사실·결정·사용자 선호를 간결한 한국어 불릿으로 추출하라. 잡담/명령출력은 제외." },
+        { role: "user", content: text.slice(0, 20000) },
+      ],
+    }),
+    signal: AbortSignal.timeout(180000),
+  });
+  const j = (await r.json()) as { choices?: { message?: { content?: string } }[] };
+  const c = j?.choices?.[0]?.message?.content;
+  return typeof c === "string" && c.trim() ? c.trim() : text;
+}
+
+function sessionsApi(): Plugin {
+  return {
+    name: "supermemory-sessions-api",
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url || !req.url.startsWith("/admin/sessions/")) return next();
+        const send = (code: number, body: unknown) => {
+          res.statusCode = code;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify(body));
+        };
+        const u = new URL(req.url, "http://localhost");
+        const action = u.pathname.replace("/admin/sessions/", "");
+        try {
+          if (action === "list") return send(200, listSessionRows());
+          if (action === "get") {
+            const file = u.searchParams.get("file") || "";
+            if (!resolve(file).startsWith(PROJECTS_DIR)) return send(403, { error: "범위 밖 경로" });
+            const d = parseSession(file, true);
+            if (!d) return send(404, { error: "세션 없음" });
+            return send(200, d);
+          }
+          if (action === "import" && req.method === "POST") {
+            const body = await new Promise<string>((rs) => {
+              let b = "";
+              req.on("data", (c) => (b += c));
+              req.on("end", () => rs(b));
+            });
+            const { files = [], summarize = true, containerTag } = JSON.parse(body || "{}") as {
+              files?: string[]; summarize?: boolean; containerTag?: string;
+            };
+            const results: { sessionId: string; ok: boolean; containerTag?: string; error?: string }[] = [];
+            for (const file of files) {
+              const sessionId = basename(file).replace(/\.jsonl$/, "");
+              try {
+                if (!resolve(file).startsWith(PROJECTS_DIR)) { results.push({ sessionId, ok: false, error: "범위 밖" }); continue; }
+                const d = parseSession(file, true);
+                if (!d || !d.text) { results.push({ sessionId, ok: false, error: "내용 없음" }); continue; }
+                let tag = containerTag;
+                if (!tag) {
+                  if (!d.cwd) { results.push({ sessionId, ok: false, error: "컨테이너 미지정(cwd 없음)" }); continue; }
+                  try {
+                    const top = (await pexec("git rev-parse --show-toplevel", { cwd: d.cwd })).stdout.trim();
+                    tag = projectTagFor(top || d.cwd);
+                  } catch {
+                    tag = projectTagFor(d.cwd);
+                  }
+                }
+                let content = `세션 백필: ${d.title}\n\n${d.text}`;
+                if (summarize) {
+                  try { content = `세션 요약(${d.title}):\n` + (await ollamaSummarize(d.text)); } catch { /* fallback 정제본 */ }
+                }
+                const pr = await fetch(`${SUPERMEMORY_URL}/v3/documents`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ content, containerTags: [tag], metadata: { source: "session-backfill", sessionId } }),
+                });
+                if (!pr.ok) { results.push({ sessionId, ok: false, error: `서버 ${pr.status}` }); continue; }
+                markImported([sessionId]);
+                results.push({ sessionId, ok: true, containerTag: tag });
+              } catch (e) {
+                results.push({ sessionId, ok: false, error: e instanceof Error ? e.message : String(e) });
+              }
+            }
+            sessCache = null;
+            return send(200, { results });
+          }
+          return send(404, { error: `unknown: ${action}` });
+        } catch (e) {
+          return send(500, { error: e instanceof Error ? e.message : String(e) });
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), serverControl(), projectsScan()],
+  plugins: [react(), serverControl(), projectsScan(), sessionsApi()],
   server: {
     port: 5173,
     proxy: {

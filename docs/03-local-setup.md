@@ -36,16 +36,23 @@ curl http://localhost:11434   # → "Ollama is running"
 > ⚠️ **임베딩 모델(`nomic-embed-text`)은 불필요** — supermemory 서버가 임베딩을
 > 내장 로컬(WASM) 엔진으로 자체 계산한다. Ollama에는 메모리 추출용 텍스트 모델만 있으면 됨.
 
-```bash
-# 공식 문서 예시 모델 (RAM 32GB 기준 권장)
-ollama pull gpt-oss:20b     # ~14GB, 추출 품질 좋음
+> ⚠️ **추출 모델 요건**: supermemory 메모리 에이전트는 **tool(함수) 호출**로 구조화 추출을 한다.
+> 따라서 ① **tool 호출 지원** ② **구조화 JSON 무결성(reasoning/`<think>` 누출 없음)** 이 필수.
+> Gemma 3(tool 미지원)·순수 reasoning 모델(gpt-oss harmony, deepseek-r1 등)은 추출 0개가 될 수 있다.
 
-# 가벼운 대안
-ollama pull qwen3:8b        # ~5GB
-ollama pull llama3.2        # ~2GB, 품질 낮을 수 있음
+```bash
+# 권장 (2026, 비중국, 검증됨) — tool✅ + JSON✅
+ollama pull gemma4:e4b       # ~9.6GB, 한국어·추출 품질 우수 (Apache-2.0)
+
+# 대안 (tool 지원, reasoning 없음)
+ollama pull llama3.1:8b      # ~4.9GB, 더 빠름 (Llama Community License)
+ollama pull mistral-nemo:12b # ~7GB, 네이티브 function calling (Apache-2.0)
 
 ollama list
 ```
+
+> 새 추출 모델을 붙이기 전 검증: `curl localhost:11434/v1/chat/completions`에 `tools=[...]`를 넣어
+> `tool_calls[].function.arguments`가 valid JSON인지(`jq`) + `<think>` 누출 없는지 먼저 확인할 것.
 
 ---
 

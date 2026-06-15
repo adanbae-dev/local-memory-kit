@@ -36,7 +36,8 @@ MIT는 **코드 사용 권리만** 부여하고 **브랜드명 권리는 주지 
 ## 추출 모델 (Ollama로 사용자가 받음 — 라이선스 상이, 직접 확인 필요)
 | 모델 | 라이선스 | 출처 | 상용 사용 주의 |
 |---|---|---|---|
-| Gemma 3 | **Google Gemma Terms of Use** (OSI 아님) | Google | 사용 제한 조항 확인 필요 |
+| Gemma 4 (e4b 등) | **Apache-2.0** | Google | 추출용 권장 (tool✅, JSON✅ 검증) |
+| Gemma 3 | **Google Gemma Terms of Use** (OSI 아님) | Google | tool 미지원 → 추출 부적합 |
 | Llama 3.1 / 3.2 | **Llama Community License** | Meta | MAU 700M 초과 시 별도 |
 | Mistral-Nemo | Apache-2.0 | Mistral AI | 자유 |
 | IBM Granite 3.x | Apache-2.0 | IBM | 자유 |

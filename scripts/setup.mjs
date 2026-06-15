@@ -2,7 +2,7 @@
 /**
  * supermemory-local-kit 원스톱 설치 (macOS)
  * Ollama → 모델 → supermemory-server → launchd → API키 → Claude Code 플러그인 → 관리 UI
- * 멱등(idempotent): 이미 된 단계는 건너뜀.  모델 변경: SM_MODEL=qwen3:8b npm run setup
+ * 멱등(idempotent): 이미 된 단계는 건너뜀.  모델 변경: SM_MODEL=llama3.1:8b npm run setup
  */
 import { execSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
@@ -10,7 +10,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const HOME = homedir();
-const MODEL = process.env.SM_MODEL || "gpt-oss:20b";
+// 추출 모델 요건: tool(함수) 호출 지원 + 구조화 JSON 무결성(reasoning 누출 없음).
+// gemma4:e4b 검증됨(tool✅, JSON✅). 대안: llama3.1:8b, mistral-nemo:12b. (Gemma 3·순수 reasoning 모델은 부적합)
+const MODEL = process.env.SM_MODEL || "gemma4:e4b";
 const PORT = process.env.SM_PORT || "6767";
 const LABEL = "com.supermemory.local";
 const PLIST = join(HOME, "Library/LaunchAgents", `${LABEL}.plist`);
@@ -160,5 +162,5 @@ console.log(`
   관리 UI:    npm run dev   →  http://localhost:5173
   서버 상태:  npm run server:status
   플러그인:   새 터미널에서 Claude Code 재시작 → /supermemory:status 로 확인
-  모델 변경:  SM_MODEL=qwen3:8b npm run setup (plist 재생성)
+  모델 변경:  SM_MODEL=llama3.1:8b npm run setup (plist 재생성)
 `);

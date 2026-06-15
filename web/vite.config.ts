@@ -123,26 +123,55 @@ async function scanProjects(): Promise<Record<string, ProjInfo>> {
   if (projCache && Date.now() - projCache.at < 60_000) return projCache.map;
   const map: Record<string, ProjInfo> = {};
   const seen = new Set<string>();
-  for (const root of scanRoots()) {
-    let entries: string[];
+  const MAX_DEPTH = 3;
+  let budget = 5000; // 방문 디렉터리 상한(폭주 방지)
+
+  // 깊이 제한 재귀로 .git 보유 디렉터리 수집. 저장소 경계에서 하위 탐색 중단.
+  function walk(dir: string, depth: number, out: string[]): void {
+    if (depth < 0 || budget-- <= 0) return;
+    let entries;
     try {
-      entries = readdirSync(root, { withFileTypes: true })
-        .filter((d) => d.isDirectory() && !d.name.startsWith("."))
-        .map((d) => join(root, d.name));
+      entries = readdirSync(dir, { withFileTypes: true });
     } catch {
-      continue;
+      return;
     }
-    for (const dir of entries) {
-      if (!existsSync(join(dir, ".git"))) continue;
-      try {
-        const { stdout } = await pexec("git rev-parse --show-toplevel", { cwd: dir });
-        const top = stdout.trim();
-        if (!top || seen.has(top)) continue;
+    for (const e of entries) {
+      if (!e.isDirectory() || e.name.startsWith(".")) continue;
+      const sub = join(dir, e.name);
+      if (existsSync(join(sub, ".git"))) out.push(sub); // 저장소 발견 → 기록, 하위 미탐색
+      else if (depth > 0) walk(sub, depth - 1, out);
+    }
+  }
+
+  const gitDirs: string[] = [];
+  for (const root of scanRoots()) {
+    if (existsSync(join(root, ".git"))) gitDirs.push(root);
+    walk(root, MAX_DEPTH, gitDirs);
+  }
+
+  for (const dir of gitDirs) {
+    try {
+      const top = (await pexec("git rev-parse --show-toplevel", { cwd: dir })).stdout.trim();
+      if (top && !seen.has(top)) {
         seen.add(top);
         map[projectTagFor(top)] = { folder: basename(top), path: top };
-      } catch {
-        /* git 없음/비저장소 — 건너뜀 */
       }
+      // 워크트리도 포함 — 세션이 워크트리(.claude/worktrees/*)에서 캡처된 경우 대응
+      try {
+        const wl = (await pexec("git worktree list --porcelain", { cwd: dir })).stdout;
+        for (const line of wl.split("\n")) {
+          if (!line.startsWith("worktree ")) continue;
+          const wt = line.slice(9).trim();
+          if (wt && !seen.has(wt)) {
+            seen.add(wt);
+            map[projectTagFor(wt)] = { folder: basename(wt), path: wt };
+          }
+        }
+      } catch {
+        /* worktree 목록 실패 무시 */
+      }
+    } catch {
+      /* 비저장소 — 건너뜀 */
     }
   }
   projCache = { at: Date.now(), map };

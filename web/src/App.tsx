@@ -803,13 +803,24 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    listTags().then((list) => {
+    Promise.all([listTags(), resolveProjects()]).then(([list, pm]) => {
       setTags(list);
+      setProjectMap(pm);
       if (list.length > 0 && !list.some((t) => t.containerTag === DEFAULT_TAG)) {
         setTag(list[0].containerTag);
       }
+      // Task 2: 폴더 매칭된 태그명을 서버에 자동 영구저장 (기본명일 때만 — 사용자 커스텀명 보존)
+      const isDefault = (t: TagInfo) =>
+        !t.name || t.name === t.containerTag || t.name === `Space ${t.containerTag}`;
+      const toFix = list.filter(
+        (t) => pm[t.containerTag] && isDefault(t) && t.name !== pm[t.containerTag].folder
+      );
+      if (toFix.length > 0) {
+        Promise.allSettled(
+          toFix.map((t) => renameTag(t.containerTag, pm[t.containerTag].folder))
+        ).then(() => listTags().then(setTags));
+      }
     });
-    resolveProjects().then(setProjectMap);
   }, []);
 
   // 태그 표시 이름: 매칭된 프로젝트 폴더 > 서버에 저장된 친근한 이름 > 원본 태그

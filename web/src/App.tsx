@@ -1036,7 +1036,12 @@ export function App() {
   return (
     <div className="app">
       <header>
-        <h1>🧠 Supermemory 관리</h1>
+        <div className="header-top">
+          <h1>🧠 Supermemory 관리</h1>
+          <label className="muted" style={{ display: "flex", alignItems: "center", gap: 4 }} title="메모리·프로필을 한글로 번역해 표시(저장 데이터는 영어 유지)">
+            <input type="checkbox" checked={ko} onChange={(e) => setKo(e.target.checked)} /> 🇰🇷 한글로 보기
+          </label>
+        </div>
         <div className="tagbox">
           <label>컨테이너</label>
           {tags.length > 0 ? (
@@ -1060,9 +1065,6 @@ export function App() {
             </button>
           )}
           <button className="ghost" onClick={loadTags}>태그 갱신</button>
-          <label className="muted" style={{ display: "flex", alignItems: "center", gap: 4 }} title="메모리·프로필을 한글로 번역해 표시(저장 데이터는 영어 유지)">
-            <input type="checkbox" checked={ko} onChange={(e) => setKo(e.target.checked)} /> 🇰🇷 한글로 보기
-          </label>
         </div>
       </header>
 

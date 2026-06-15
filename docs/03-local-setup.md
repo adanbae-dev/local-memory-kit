@@ -202,7 +202,7 @@ cat > ~/Library/LaunchAgents/supermemory.plist << 'EOF'
     <key>OPENAI_BASE_URL</key>  <string>http://localhost:11434/v1</string>
     <key>OPENAI_API_KEY</key>   <string>ollama</string>
     <key>OPENAI_MODEL</key>     <string>gpt-oss:20b</string>
-    <key>SUPERMEMORY_DATA_DIR</key> <string>/Users/adanbae/.supermemory-data</string>
+    <key>SUPERMEMORY_DATA_DIR</key> <string>/Users/&lt;username&gt;/.supermemory-data</string>
     <key>SUPERMEMORY_DISABLE_TELEMETRY</key> <string>1</string>
   </dict>
   <key>RunAtLoad</key>

@@ -26,7 +26,7 @@
 | 서버 바이너리 | `~/.local/bin/supermemory-server` (0.0.2) |
 | 데이터 디렉터리 | `~/.supermemory-data` (암호화 로컬 저장) |
 | API URL | `http://localhost:6767` |
-| org id | `DenXvkJLGpxzsKAbrDMd1g` |
+| org id | (서버 첫 부팅 시 자동 발급) |
 | API 키 | `~/.zshrc`에 저장됨 (localhost 요청엔 자동 적용) |
 | 추출 모델 | Ollama `gpt-oss:20b` |
 | 임베딩 | 서버 내장 `Xenova/bge-base-en-v1.5` (별도 모델 불필요 — 실증됨) |
@@ -157,6 +157,6 @@ export SUPERMEMORY_CC_API_KEY="sm_여기에_로컬_키"
    모니터링·UI가 404를 "비정상"으로 판정해 멀쩡한 서버를 반복 재시작(크래시 루프의 상당 부분은 자초).
 
 **수정 사항**: plist Background 제거 / `web/vite.config.ts`·README·docs/03 health 경로 `/v3/health`로 정정 /
-데이터 초기화로 API 키 변경됨(org `KD8L9jMXL1NjJ7RDqmk6jD`, 새 키 `~/.zshrc` 반영 완료).
+데이터 초기화로 API 키 변경됨(org `<org-id>`, 새 키 `~/.zshrc` 반영 완료).
 
 **최종 상태**: launchd 자동기동 정상(부팅 ~10초), UI(:5173) 목록·검색·추가·삭제·서버제어 모두 동작.

@@ -363,7 +363,7 @@ function sessionsApi(): Plugin {
             const { files = [], summarize = true, containerTag } = JSON.parse(body || "{}") as {
               files?: string[]; summarize?: boolean; containerTag?: string;
             };
-            const results: { sessionId: string; ok: boolean; containerTag?: string; error?: string }[] = [];
+            const results: { sessionId: string; ok: boolean; containerTag?: string; folder?: string; error?: string }[] = [];
             for (const file of files) {
               const sessionId = basename(file).replace(/\.jsonl$/, "");
               try {
@@ -371,14 +371,16 @@ function sessionsApi(): Plugin {
                 const d = parseSession(file, true);
                 if (!d || !d.text) { results.push({ sessionId, ok: false, error: "내용 없음" }); continue; }
                 let tag = containerTag;
+                let folder = "";
                 if (!tag) {
                   if (!d.cwd) { results.push({ sessionId, ok: false, error: "컨테이너 미지정(cwd 없음)" }); continue; }
+                  let base = d.cwd;
                   try {
                     const top = (await pexec("git rev-parse --show-toplevel", { cwd: d.cwd })).stdout.trim();
-                    tag = projectTagFor(top || d.cwd);
-                  } catch {
-                    tag = projectTagFor(d.cwd);
-                  }
+                    if (top) base = top;
+                  } catch { /* 비저장소 — cwd 사용 */ }
+                  tag = projectTagFor(base);
+                  folder = basename(base);
                 }
                 let content = `세션 백필: ${d.title}\n\n${d.text}`;
                 if (summarize) {
@@ -391,7 +393,17 @@ function sessionsApi(): Plugin {
                 });
                 if (!pr.ok) { results.push({ sessionId, ok: false, error: `서버 ${pr.status}` }); continue; }
                 markImported([sessionId]);
-                results.push({ sessionId, ok: true, containerTag: tag });
+                // 새 컨테이너에 폴더명 부여 → 셀렉트에서 해시 대신 폴더명 표시
+                if (folder) {
+                  try {
+                    await fetch(`${SUPERMEMORY_URL}/v3/container-tags/${encodeURIComponent(tag)}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ name: folder }),
+                    });
+                  } catch { /* 이름 지정 실패 무시 */ }
+                }
+                results.push({ sessionId, ok: true, containerTag: tag, folder });
               } catch (e) {
                 results.push({ sessionId, ok: false, error: e instanceof Error ? e.message : String(e) });
               }

@@ -271,6 +271,7 @@ export interface ImportResult {
   sessionId: string;
   ok: boolean;
   containerTag?: string;
+  folder?: string;
   error?: string;
 }
 

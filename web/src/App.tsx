@@ -846,9 +846,14 @@ function SessionsTab({ projectMap }: { projectMap: ProjectMap }) {
     setResult(null);
     try {
       const { results } = await importSessions(files, summarize);
-      const ok = results.filter((r) => r.ok).length;
+      const ok = results.filter((r) => r.ok);
       const fail = results.filter((r) => !r.ok);
-      setResult(`완료: ${ok}/${results.length} 성공` + (fail.length ? ` · 실패: ${fail.map((r) => r.error).join(", ")}` : ""));
+      const where = [...new Set(ok.map((r) => r.folder || r.containerTag).filter(Boolean))];
+      setResult(
+        `완료: ${ok.length}/${results.length} 성공` +
+          (where.length ? ` → 컨테이너: ${where.join(", ")}` : "") +
+          (fail.length ? ` · 실패: ${fail.map((r) => r.error).join(", ")}` : "")
+      );
       load();
     } catch (e) {
       setError(errMsg(e));

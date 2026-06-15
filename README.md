@@ -114,6 +114,18 @@ localhost 요청에는 서버 API 키가 자동 적용된다.
 
 ---
 
+## 안정성 / 강건성 튜닝
+
+세션 트랜스크립트 자동 캡처는 특수 토큰·제어문자가 많아, supermemory 0.0.3에서 내부 직렬화가 깨지며 문서가 `failed`로 끝날 수 있다(`C++ panic` / `Malformed JSON`). 임베딩·인덱싱은 되지만(검색 가능) 추출 단계에서 크래시되는 형태다. 실패율을 낮추는 설정:
+
+- **캡처 노이즈 축소(플러그인)**: `~/.zshrc`에 `export SUPERMEMORY_SKIP_TOOLS="Bash"` — 큰 명령출력 캡처 제외. (`npm run setup`이 자동 추가)
+- **임베딩 동시성·메모리 완화(서버 plist)**: `SUPERMEMORY_LOCAL_EMBEDDING_POOL_SIZE=1` · `SUPERMEMORY_LOCAL_EMBEDDING_BATCH_SIZE=4` · `SUPERMEMORY_EMBEDDING_RAM_LIMIT=2gb`. (`npm run setup`이 plist에 자동 포함)
+- **신뢰 추출은 수동 저장**: 깔끔한 사실 문장은 100% 추출됨 — 중요한 건 수동 저장, 자동 캡처는 보조.
+- **정체/실패 문서 정리**: `queued`에 영구 정체(재시도 루프)되면 재시작이 아니라 **bulk delete**(`DELETE /v3/documents/bulk`)로 해당 문서를 제거하면 풀린다.
+- **근본 해결**: 서버 강건성은 업스트림 영역 — 주기적으로 `~/.supermemory/bin/supermemory-server upgrade`.
+
+---
+
 ## 문서
 
 | 파일 | 내용 |

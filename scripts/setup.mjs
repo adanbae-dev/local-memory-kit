@@ -100,6 +100,10 @@ if (await health()) {
     <key>SUPERMEMORY_PORT</key><string>${PORT}</string>
     <key>SUPERMEMORY_DATA_DIR</key><string>${DATA_DIR}</string>
     <key>SUPERMEMORY_DISABLE_TELEMETRY</key><string>1</string>
+    <key>SUPERMEMORY_NO_UPDATE_CHECK</key><string>1</string>
+    <key>SUPERMEMORY_LOCAL_EMBEDDING_POOL_SIZE</key><string>1</string>
+    <key>SUPERMEMORY_LOCAL_EMBEDDING_BATCH_SIZE</key><string>4</string>
+    <key>SUPERMEMORY_EMBEDDING_RAM_LIMIT</key><string>2gb</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -136,7 +140,7 @@ if (apiKey) {
   const marker = "# supermemory-local-kit";
   const cur = existsSync(zshrc) ? readFileSync(zshrc, "utf8") : "";
   if (!cur.includes(marker)) {
-    appendFileSync(zshrc, `\n${marker}\nexport SUPERMEMORY_API_URL="${BASE}"\nexport SUPERMEMORY_CC_API_KEY="${apiKey}"\n`);
+    appendFileSync(zshrc, `\n${marker}\nexport SUPERMEMORY_API_URL="${BASE}"\nexport SUPERMEMORY_CC_API_KEY="${apiKey}"\nexport SUPERMEMORY_SKIP_TOOLS="Bash"\n`);
     ok("~/.zshrc 에 env 추가 (새 터미널부터 적용)");
   } else ok("~/.zshrc env 이미 설정됨");
 } else warn(`API 키를 로그에서 못 찾음 — 직접 확인: grep "api key" ${OUT_LOG}`);

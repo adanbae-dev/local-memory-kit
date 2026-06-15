@@ -101,7 +101,7 @@ td.title { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-sp
   display: flex; justify-content: flex-end;
 }
 .drawer {
-  width: min(460px, 92vw); height: 100%; overflow-y: auto;
+  width: 50vw; height: 100%; overflow-y: auto;
   background: var(--panel); border-left: 1px solid var(--border); padding: 20px;
 }
 .drawer-head { display: flex; justify-content: space-between; align-items: center; }

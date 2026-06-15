@@ -2,6 +2,10 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
 
 const pexec = promisify(exec);
 
@@ -98,8 +102,74 @@ function serverControl(): Plugin {
   };
 }
 
+// ─── 프로젝트 폴더 ↔ 컨테이너 태그 매핑 ───
+// 플러그인(claude-supermemory)과 동일한 규칙: claudecode_project_<sha256(gitRoot)[:16]>.
+// 해시는 단방향이므로 후보 폴더를 스캔해 정방향으로 해시→폴더 맵을 만든다.
+function projectTagFor(absPath: string): string {
+  return "claudecode_project_" + createHash("sha256").update(absPath).digest("hex").slice(0, 16);
+}
+
+function scanRoots(): string[] {
+  const env = process.env.SM_SCAN_ROOTS;
+  if (env) return env.split(":").map((s) => s.trim()).filter(Boolean);
+  const home = homedir();
+  return [join(home, "Dev"), home];
+}
+
+interface ProjInfo { folder: string; path: string; }
+let projCache: { at: number; map: Record<string, ProjInfo> } | null = null;
+
+async function scanProjects(): Promise<Record<string, ProjInfo>> {
+  if (projCache && Date.now() - projCache.at < 60_000) return projCache.map;
+  const map: Record<string, ProjInfo> = {};
+  const seen = new Set<string>();
+  for (const root of scanRoots()) {
+    let entries: string[];
+    try {
+      entries = readdirSync(root, { withFileTypes: true })
+        .filter((d) => d.isDirectory() && !d.name.startsWith("."))
+        .map((d) => join(root, d.name));
+    } catch {
+      continue;
+    }
+    for (const dir of entries) {
+      if (!existsSync(join(dir, ".git"))) continue;
+      try {
+        const { stdout } = await pexec("git rev-parse --show-toplevel", { cwd: dir });
+        const top = stdout.trim();
+        if (!top || seen.has(top)) continue;
+        seen.add(top);
+        map[projectTagFor(top)] = { folder: basename(top), path: top };
+      } catch {
+        /* git 없음/비저장소 — 건너뜀 */
+      }
+    }
+  }
+  projCache = { at: Date.now(), map };
+  return map;
+}
+
+function projectsScan(): Plugin {
+  return {
+    name: "supermemory-projects-scan",
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url || !req.url.startsWith("/admin/projects/scan")) return next();
+        res.setHeader("Content-Type", "application/json");
+        try {
+          res.statusCode = 200;
+          res.end(JSON.stringify(await scanProjects()));
+        } catch (e) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }));
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), serverControl()],
+  plugins: [react(), serverControl(), projectsScan()],
   server: {
     port: 5173,
     proxy: {

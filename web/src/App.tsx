@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  extractKeywords,
+  resolveProjects,
+  type Keywords,
+  type ProjectMap,
+} from "./insights";
 import {
   addMemory,
   bulkDeleteDocuments,
@@ -544,12 +550,22 @@ function ProfileTab({ tag }: { tag: string }) {
 }
 
 /* ───────────────────────── 태그 관리 탭 ───────────────────────── */
-function TagsTab({ tags, onTagsChanged }: { tags: TagInfo[]; onTagsChanged: () => void }) {
+function TagsTab({ tags, projectMap, onTagsChanged }: { tags: TagInfo[]; projectMap: ProjectMap; onTagsChanged: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [mergeSrc, setMergeSrc] = useState("");
   const [mergeDst, setMergeDst] = useState("");
+
+  async function applyFolder(tag: string, folder: string) {
+    setError(null);
+    try {
+      await renameTag(tag, folder);
+      onTagsChanged();
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  }
 
   async function doRename(tag: string) {
     if (!newName.trim()) return;
@@ -596,8 +612,16 @@ function TagsTab({ tags, onTagsChanged }: { tags: TagInfo[]; onTagsChanged: () =
       {tags.map((t) => (
         <div className="tagrow" key={t.id}>
           <strong>{t.name}</strong>
+          {projectMap[t.containerTag] && (
+            <span className="folder-badge">📁 {projectMap[t.containerTag].folder}</span>
+          )}
           <span className="mono muted">{t.containerTag}</span>
           <span className="muted">문서 {t.documentCount} · 메모리 {t.memoryCount}</span>
+          {projectMap[t.containerTag] && t.name !== projectMap[t.containerTag].folder && (
+            <button className="ghost" onClick={() => applyFolder(t.containerTag, projectMap[t.containerTag].folder)}>
+              폴더명 적용
+            </button>
+          )}
           {renaming === t.containerTag ? (
             <>
               <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="새 이름" />
@@ -627,14 +651,133 @@ function TagsTab({ tags, onTagsChanged }: { tags: TagInfo[]; onTagsChanged: () =
   );
 }
 
+/* ───────────────────────── 인사이트 탭 (공통 내용) ───────────────────────── */
+function InsightsTab({ tag }: { tag: string }) {
+  const [docs, setDocs] = useState<SmDocument[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sel, setSel] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setSel(null);
+    try {
+      const acc: SmDocument[] = [];
+      // 공통어 집계를 위해 여러 페이지를 모은다 (최대 300건)
+      for (let page = 1; page <= 3; page++) {
+        const data = await listDocuments(tag, page, 100);
+        acc.push(...data.documents);
+        if (page >= data.pagination.totalPages) break;
+      }
+      setDocs(acc);
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [tag]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const kw: Keywords = useMemo(
+    () => extractKeywords(docs.map((d) => `${d.title || ""} ${d.content || ""}`)),
+    [docs]
+  );
+
+  const maxCount = kw.unigrams[0]?.count || 1;
+  function sizeFor(count: number): number {
+    return Math.round(13 + (count / maxCount) * 17); // 13~30px
+  }
+
+  const matches = sel
+    ? docs.filter((d) => `${d.title || ""} ${d.content || ""}`.toLowerCase().includes(sel))
+    : [];
+
+  return (
+    <section className="panel">
+      <h2>
+        공통 내용 인사이트 <span className="muted">(문서 {kw.docCount}건 분석)</span>
+      </h2>
+      <p className="muted">
+        이 컨테이너 문서 본문에서 자주 함께 등장하는 키워드·구문을 추출했습니다. 칩을 누르면 해당 단어가 포함된 문서를 모아 보여줍니다. (집계는 브라우저에서 수행 — 외부 전송 없음)
+      </p>
+      {error && <div className="error small">⚠ {error}</div>}
+      <div className="bulkbar">
+        <button className="ghost" onClick={load} disabled={loading}>{loading ? "분석 중…" : "다시 분석"}</button>
+        {sel && <button className="ghost" onClick={() => setSel(null)}>필터 해제</button>}
+      </div>
+
+      {loading && docs.length === 0 ? (
+        <p className="muted">불러오는 중…</p>
+      ) : kw.unigrams.length === 0 ? (
+        <p className="muted">분석할 문서가 없습니다.</p>
+      ) : (
+        <>
+          <h3>공통 키워드</h3>
+          <div className="cloud">
+            {kw.unigrams.map((t) => (
+              <button
+                key={t.term}
+                className={`chip${sel === t.term ? " chip-on" : ""}`}
+                style={{ fontSize: sizeFor(t.count) }}
+                title={`${t.count}개 문서`}
+                onClick={() => setSel(sel === t.term ? null : t.term)}
+              >
+                {t.term} <span className="chip-n">{t.count}</span>
+              </button>
+            ))}
+          </div>
+
+          {kw.bigrams.length > 0 && (
+            <>
+              <h3 style={{ marginTop: 18 }}>공통 구문</h3>
+              <div className="cloud">
+                {kw.bigrams.map((t) => (
+                  <button
+                    key={t.term}
+                    className={`chip phrase${sel === t.term ? " chip-on" : ""}`}
+                    title={`${t.count}개 문서`}
+                    onClick={() => setSel(sel === t.term ? null : t.term)}
+                  >
+                    {t.term} <span className="chip-n">{t.count}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {sel && (
+            <>
+              <h3 style={{ marginTop: 18 }}>
+                "{sel}" 포함 문서 <span className="muted">({matches.length})</span>
+              </h3>
+              {matches.length === 0 ? (
+                <p className="muted">없음</p>
+              ) : (
+                <ul className="profile-list">
+                  {matches.map((d) => (
+                    <li key={d.id}>{d.title || d.content?.slice(0, 80) || "(제목 없음)"}</li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 /* ───────────────────────── 루트 ───────────────────────── */
-type Tab = "docs" | "memories" | "profile" | "tags";
+type Tab = "docs" | "memories" | "profile" | "tags" | "insights";
 
 export function App() {
   const [tab, setTab] = useState<Tab>("docs");
   const [tags, setTags] = useState<TagInfo[]>([]);
   const [tag, setTag] = useState(DEFAULT_TAG);
   const [customMode, setCustomMode] = useState(false);
+  const [projectMap, setProjectMap] = useState<ProjectMap>({});
 
   const loadTags = useCallback(async () => {
     const list = await listTags();
@@ -649,7 +792,35 @@ export function App() {
         setTag(list[0].containerTag);
       }
     });
+    resolveProjects().then(setProjectMap);
   }, []);
+
+  // 태그 표시 이름: 매칭된 프로젝트 폴더 > 서버에 저장된 친근한 이름 > 원본 태그
+  const displayName = useCallback(
+    (t: string): string => {
+      const p = projectMap[t];
+      if (p) return `📁 ${p.folder}`;
+      const info = tags.find((x) => x.containerTag === t);
+      if (info && info.name && info.name !== t) return info.name;
+      return t;
+    },
+    [projectMap, tags]
+  );
+
+  // 현재 태그가 폴더로 매칭됐고 아직 서버에 그 이름이 저장되지 않았으면 영구저장 가능
+  const folderMatch = projectMap[tag];
+  const currentInfo = tags.find((x) => x.containerTag === tag);
+  const canPersist = !!folderMatch && currentInfo?.name !== folderMatch.folder;
+
+  async function persistFolderName() {
+    if (!folderMatch) return;
+    try {
+      await renameTag(tag, folderMatch.folder);
+      loadTags();
+    } catch {
+      /* 표시는 이미 폴더명이라 실패해도 치명적 아님 */
+    }
+  }
 
   function onSelectTag(v: string) {
     if (v === CUSTOM) {
@@ -672,7 +843,7 @@ export function App() {
             <>
               <select value={customMode ? CUSTOM : tagInList ? tag : CUSTOM} onChange={(e) => onSelectTag(e.target.value)}>
                 {tags.map((t) => (
-                  <option key={t.id} value={t.containerTag}>{t.name} · 문서 {t.documentCount}</option>
+                  <option key={t.id} value={t.containerTag}>{displayName(t.containerTag)} · 문서 {t.documentCount}</option>
                 ))}
                 <option value={CUSTOM}>직접 입력…</option>
               </select>
@@ -682,6 +853,11 @@ export function App() {
             </>
           ) : (
             <input value={tag} onChange={(e) => setTag(e.target.value)} spellCheck={false} />
+          )}
+          {canPersist && (
+            <button className="ghost" title="이 폴더명을 서버 태그 이름으로 영구 저장" onClick={persistFolderName}>
+              📁 {folderMatch!.folder} 이름 저장
+            </button>
           )}
           <button className="ghost" onClick={loadTags}>태그 갱신</button>
         </div>
@@ -693,13 +869,15 @@ export function App() {
         <button className={tab === "docs" ? "active" : ""} onClick={() => setTab("docs")}>문서</button>
         <button className={tab === "memories" ? "active" : ""} onClick={() => setTab("memories")}>메모리</button>
         <button className={tab === "profile" ? "active" : ""} onClick={() => setTab("profile")}>프로필</button>
+        <button className={tab === "insights" ? "active" : ""} onClick={() => setTab("insights")}>인사이트</button>
         <button className={tab === "tags" ? "active" : ""} onClick={() => setTab("tags")}>태그</button>
       </nav>
 
       {tab === "docs" && <DocsTab tag={tag} onTagsChanged={loadTags} />}
       {tab === "memories" && <MemoriesTab tag={tag} />}
       {tab === "profile" && <ProfileTab tag={tag} />}
-      {tab === "tags" && <TagsTab tags={tags} onTagsChanged={loadTags} />}
+      {tab === "insights" && <InsightsTab tag={tag} />}
+      {tab === "tags" && <TagsTab tags={tags} projectMap={projectMap} onTagsChanged={loadTags} />}
     </div>
   );
 }

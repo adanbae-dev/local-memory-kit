@@ -166,3 +166,24 @@ td.chk, th.chk { width: 30px; text-align: center; }
 .tagrow { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .tagrow .mono { font-size: 12px; }
 .spin { color: var(--muted); font-size: 12px; }
+
+/* 폴더 배지 */
+.folder-badge {
+  font-size: 12px; color: var(--accent);
+  background: rgba(91, 140, 255, 0.12);
+  border: 1px solid rgba(91, 140, 255, 0.3);
+  border-radius: 999px; padding: 2px 9px;
+}
+
+/* 인사이트 태그클라우드 */
+.cloud { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin-top: 10px; }
+.chip {
+  background: #0e1015; color: var(--fg);
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 4px 12px; font-weight: 500; line-height: 1.3; cursor: pointer;
+}
+.chip:hover { border-color: var(--accent); }
+.chip.chip-on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.chip.phrase { font-size: 13px; }
+.chip-n { color: var(--muted); font-size: 0.8em; font-variant-numeric: tabular-nums; }
+.chip.chip-on .chip-n { color: rgba(255, 255, 255, 0.8); }

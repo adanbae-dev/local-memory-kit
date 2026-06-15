@@ -27,6 +27,7 @@ import {
   listSessions,
   getSession,
   importSessions,
+  translate,
   type Chunk,
   type MemoryEntry,
   type Pagination,
@@ -451,7 +452,7 @@ function DocsTab({ tag, onTagsChanged }: { tag: string; onTagsChanged: () => voi
 }
 
 /* ───────────────────────── 메모리 탭 (추출된 기억) ───────────────────────── */
-function MemoriesTab({ tag }: { tag: string }) {
+function MemoriesTab({ tag, ko }: { tag: string; ko: boolean }) {
   const [entries, setEntries] = useState<MemoryEntry[]>([]);
   const [pg, setPg] = useState<Pagination | null>(null);
   const [page, setPage] = useState(1);
@@ -474,6 +475,17 @@ function MemoriesTab({ tag }: { tag: string }) {
 
   useEffect(() => { setPage(1); }, [tag]);
   useEffect(() => { load(); }, [load]);
+
+  const [tx, setTx] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!ko || entries.length === 0) return;
+    const texts = entries.map((m) => m.memory);
+    translate(texts).then((r) => {
+      const map: Record<string, string> = {};
+      texts.forEach((t, i) => { map[t] = r[i] || t; });
+      setTx(map);
+    }).catch(() => {});
+  }, [ko, entries]);
 
   async function onForget(id: string) {
     if (!confirm("이 기억을 삭제(forget)할까요?")) return;
@@ -504,7 +516,7 @@ function MemoriesTab({ tag }: { tag: string }) {
           <tbody>
             {entries.map((m) => (
               <tr key={m.id}>
-                <td>{m.memory}</td>
+                <td title={m.memory}>{ko && tx[m.memory] ? tx[m.memory] : m.memory}</td>
                 <td className="muted">v{m.version}</td>
                 <td>{m.isLatest ? "✓" : ""}</td>
                 <td><button className="del" onClick={() => onForget(m.id)}>삭제</button></td>
@@ -525,7 +537,7 @@ function MemoriesTab({ tag }: { tag: string }) {
 }
 
 /* ───────────────────────── 프로필 탭 ───────────────────────── */
-function ProfileTab({ tag }: { tag: string }) {
+function ProfileTab({ tag, ko }: { tag: string; ko: boolean }) {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -545,6 +557,18 @@ function ProfileTab({ tag }: { tag: string }) {
 
   useEffect(() => { load(); }, [load]);
 
+  const [tx, setTx] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!ko || !profile) return;
+    const texts = [...profile.static, ...profile.dynamic];
+    translate(texts).then((r) => {
+      const map: Record<string, string> = {};
+      texts.forEach((t, i) => { map[t] = r[i] || t; });
+      setTx(map);
+    }).catch(() => {});
+  }, [ko, profile]);
+  const tr = (s: string) => (ko && tx[s] ? tx[s] : s);
+
   return (
     <section className="panel">
       <h2>사용자 프로필</h2>
@@ -559,11 +583,11 @@ function ProfileTab({ tag }: { tag: string }) {
         <>
           <h3>Static (장기 특성) — {profile.static.length}</h3>
           {profile.static.length === 0 ? <p className="muted">없음</p> : (
-            <ul className="profile-list">{profile.static.map((s, i) => <li key={i}>{s}</li>)}</ul>
+            <ul className="profile-list">{profile.static.map((s, i) => <li key={i} title={s}>{tr(s)}</li>)}</ul>
           )}
           <h3 style={{ marginTop: 16 }}>Dynamic (최근 맥락) — {profile.dynamic.length}</h3>
           {profile.dynamic.length === 0 ? <p className="muted">없음</p> : (
-            <ul className="profile-list">{profile.dynamic.map((s, i) => <li key={i}>{s}</li>)}</ul>
+            <ul className="profile-list">{profile.dynamic.map((s, i) => <li key={i} title={s}>{tr(s)}</li>)}</ul>
           )}
         </>
       )}
@@ -1005,6 +1029,8 @@ export function App() {
     }
   }
 
+  const [ko, setKo] = useState<boolean>(() => localStorage.getItem("sm_ko") === "1");
+  useEffect(() => { localStorage.setItem("sm_ko", ko ? "1" : "0"); }, [ko]);
   const tagInList = tags.some((t) => t.containerTag === tag);
 
   return (
@@ -1034,6 +1060,9 @@ export function App() {
             </button>
           )}
           <button className="ghost" onClick={loadTags}>태그 갱신</button>
+          <label className="muted" style={{ display: "flex", alignItems: "center", gap: 4 }} title="메모리·프로필을 한글로 번역해 표시(저장 데이터는 영어 유지)">
+            <input type="checkbox" checked={ko} onChange={(e) => setKo(e.target.checked)} /> 🇰🇷 한글로 보기
+          </label>
         </div>
       </header>
 
@@ -1049,8 +1078,8 @@ export function App() {
       </nav>
 
       {tab === "docs" && <DocsTab tag={tag} onTagsChanged={loadTags} />}
-      {tab === "memories" && <MemoriesTab tag={tag} />}
-      {tab === "profile" && <ProfileTab tag={tag} />}
+      {tab === "memories" && <MemoriesTab tag={tag} ko={ko} />}
+      {tab === "profile" && <ProfileTab tag={tag} ko={ko} />}
       {tab === "insights" && <InsightsTab tag={tag} />}
       {tab === "sessions" && <SessionsTab projectMap={projectMap} />}
       {tab === "tags" && <TagsTab tags={tags} projectMap={projectMap} onTagsChanged={loadTags} />}

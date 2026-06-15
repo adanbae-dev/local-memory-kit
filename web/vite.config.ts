@@ -332,6 +332,74 @@ async function ollamaSummarize(text: string): Promise<string> {
   return typeof c === "string" && c.trim() ? c.trim() : text;
 }
 
+// ─── 화면 표시용 번역 (영→한, 로컬 Ollama). 저장 데이터는 불변, 표시 전용. ───
+const translateCache = new Map<string, string>();
+function hasHangul(t: string): boolean { return /[가-힣]/.test(t); }
+
+async function ollamaTranslate(texts: string[]): Promise<string[]> {
+  const out: string[] = new Array(texts.length);
+  const todo: { i: number; t: string }[] = [];
+  texts.forEach((t, i) => {
+    if (!t || hasHangul(t)) out[i] = t;               // 이미 한글/빈값 → 그대로
+    else if (translateCache.has(t)) out[i] = translateCache.get(t) as string;
+    else todo.push({ i, t });
+  });
+  if (todo.length) {
+    const model = process.env.OPENAI_MODEL || "gemma4:e4b";
+    try {
+      const r = await fetch("http://localhost:11434/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: "Translate each English item to natural Korean. Return ONLY a JSON array of strings, same order and same length as the input. No explanations, no extra keys." },
+            { role: "user", content: JSON.stringify(todo.map((x) => x.t)) },
+          ],
+        }),
+        signal: AbortSignal.timeout(180000),
+      });
+      const j = (await r.json()) as { choices?: { message?: { content?: string } }[] };
+      const c = j?.choices?.[0]?.message?.content || "";
+      const m = c.match(/\[[\s\S]*\]/);
+      const arr = (m ? JSON.parse(m[0]) : []) as unknown[];
+      todo.forEach((x, k) => {
+        const tr = typeof arr[k] === "string" && (arr[k] as string).trim() ? (arr[k] as string) : x.t;
+        translateCache.set(x.t, tr);
+        out[x.i] = tr;
+      });
+    } catch {
+      todo.forEach((x) => { out[x.i] = x.t; });        // 실패 시 원문 유지
+    }
+  }
+  return out;
+}
+
+function translateApi(): Plugin {
+  return {
+    name: "supermemory-translate",
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url || !req.url.startsWith("/admin/translate")) return next();
+        res.setHeader("Content-Type", "application/json");
+        try {
+          const body = await new Promise<string>((rs) => {
+            let b = "";
+            req.on("data", (c) => (b += c));
+            req.on("end", () => rs(b));
+          });
+          const { texts = [] } = JSON.parse(body || "{}") as { texts?: string[] };
+          res.statusCode = 200;
+          res.end(JSON.stringify({ translations: await ollamaTranslate(texts) }));
+        } catch (e) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }));
+        }
+      });
+    },
+  };
+}
+
 function sessionsApi(): Plugin {
   return {
     name: "supermemory-sessions-api",
@@ -421,7 +489,7 @@ function sessionsApi(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), serverControl(), projectsScan(), sessionsApi()],
+  plugins: [react(), serverControl(), projectsScan(), sessionsApi(), translateApi()],
   server: {
     port: 5173,
     proxy: {

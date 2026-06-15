@@ -298,3 +298,16 @@ export async function importSessions(
   if (!r.ok) throw new Error(`가져오기 실패 ${r.status}`);
   return r.json();
 }
+
+// 화면 표시용 번역 (영→한, 로컬 Ollama). 저장 데이터는 변경하지 않음 — 표시 전용.
+export async function translate(texts: string[]): Promise<string[]> {
+  if (texts.length === 0) return [];
+  const r = await fetch("/admin/translate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ texts }),
+  });
+  if (!r.ok) throw new Error(`번역 실패 ${r.status}`);
+  const j = (await r.json()) as { translations: string[] };
+  return j.translations;
+}

@@ -70,6 +70,24 @@ tail -f ~/Library/Logs/supermemory.out.log
 
 ---
 
+## 다른 프로젝트에서 사용 / 동작 방식
+
+`/supermemory:status`는 **연결 확인용 진단 명령**이다 — 적재(캡처)는 이걸 실행하지 않아도 **자동**으로 된다.
+
+- **자동 동작**: 플러그인 훅이 세션 시작 시 관련 메모리를 주입(SessionStart)하고, 세션 종료 시 작업 내역을 캡처·추출(Stop)한다.
+- **모든 프로젝트 자동 적용**: 플러그인은 user 스코프라 모든 프로젝트에 적용된다. `~/.zshrc`의 `SUPERMEMORY_API_URL`(`http://localhost:6767`)·`SUPERMEMORY_CC_API_KEY`를 읽어 로컬 서버에 연결하므로, **`~/.zshrc`를 읽는 터미널에서 Claude Code를 켜면** 어느 프로젝트에서나 동작한다.
+- **프로젝트별 자동 격리**: 컨테이너 태그가 **git 루트 기준**(`claudecode_project_<sha256(gitroot)[:16]>`)으로 자동 분리되어, 프로젝트 간 메모리가 섞이지 않는다.
+- **확인(선택)**: `/supermemory:status`로 연결이 정상인지 볼 수 있다(적재 전제 조건은 아님).
+
+> **"not authenticated"로 뜨면** (예: IDE/GUI로 띄워 `~/.zshrc` 환경변수가 안 잡힌 경우) 해당 프로젝트에 폴백 설정을 둔다:
+> ```json
+> // .claude/.supermemory-claude/config.json  (키 포함 → 커밋 금지: .gitignore 권장)
+> { "apiKey": "sm_로컬_키", "baseUrl": "http://localhost:6767" }
+> ```
+> `baseUrl`을 반드시 로컬로 지정해야 호스티드(api.supermemory.ai)로 전송되지 않는다.
+
+---
+
 ## REST API 직접 사용 (플러그인 없이)
 
 ```bash

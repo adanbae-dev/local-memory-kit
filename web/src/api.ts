@@ -188,6 +188,17 @@ export function bulkDeleteDocuments(ids: string[]): Promise<unknown> {
   });
 }
 
+// 재추출 — 동일 content PATCH는 no-op이라, 삭제 후 같은 내용으로 재등록해 파이프라인 재실행.
+// 단일 DELETE는 잠김 시 409가 나므로 bulk 삭제 사용.
+export async function reprocessDocument(
+  id: string,
+  content: string,
+  containerTag: string
+): Promise<{ id: string; status: string }> {
+  await bulkDeleteDocuments([id]);
+  return addMemory(content, containerTag);
+}
+
 // 처리중 문서 — GET /v3/documents/processing
 export function getProcessing(): Promise<{ documents: { id: string; status?: string }[]; totalCount: number }> {
   return req("/v3/documents/processing");

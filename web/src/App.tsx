@@ -8,6 +8,7 @@ import {
 import {
   addMemory,
   bulkDeleteDocuments,
+  reprocessDocument,
   deleteDocument,
   deleteMemory,
   deleteTag,
@@ -195,6 +196,19 @@ function DocsTab({ tag, onTagsChanged }: { tag: string; onTagsChanged: () => voi
     }
   }
 
+  async function onReprocess(d: SmDocument) {
+    if (!d.content) { setError("본문이 없어 재추출할 수 없습니다."); return; }
+    if (!confirm("이 문서를 삭제 후 같은 내용으로 재등록해 재추출합니다.\n(문서 ID가 바뀝니다) 진행할까요?")) return;
+    setError(null);
+    try {
+      await reprocessDocument(d.id, d.content, d.containerTags[0] || tag);
+      if (selected?.id === d.id) closeDrawer();
+      setTimeout(() => { load(); onTagsChanged(); }, 1200);
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  }
+
   async function onDelete(id: string) {
     if (!confirm("이 문서를 삭제할까요? 되돌릴 수 없습니다.")) return;
     setError(null);
@@ -351,6 +365,9 @@ function DocsTab({ tag, onTagsChanged }: { tag: string; onTagsChanged: () => voi
                     <td><span className={`status status-${d.status}`}>{d.status}</span></td>
                     <td className="muted">{new Date(d.createdAt).toLocaleString("ko-KR")}</td>
                     <td>
+                      {(d.status === "failed" || PROCESSING_STATES.includes(d.status || "")) && d.content && (
+                        <button className="ghost" title="삭제 후 같은 내용으로 재등록해 재추출" onClick={(e) => { e.stopPropagation(); onReprocess(d); }}>♻ 재추출</button>
+                      )}
                       <button className="del" onClick={(e) => { e.stopPropagation(); onDelete(d.id); }}>삭제</button>
                     </td>
                   </tr>

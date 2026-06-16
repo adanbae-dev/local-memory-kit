@@ -31,11 +31,11 @@
 | 추출 모델 | Ollama `gpt-oss:20b` |
 | 임베딩 | 서버 내장 `Xenova/bge-base-en-v1.5` (별도 모델 불필요 — 실증됨) |
 
-> ✅ **서버 영속성 설정 완료 (launchd)**: `~/Library/LaunchAgents/com.adanbae.supermemory.local.plist`
+> ✅ **서버 영속성 설정 완료 (launchd)**: `~/Library/LaunchAgents/com.supermemory.local.plist`
 > 로그인 시 자동 기동 + 크래시 시 자동 재시작(KeepAlive). 로그: `~/Library/Logs/supermemory.{out,err}.log`
 > - 상태 확인: `launchctl list | grep supermemory` (Status 0 = 정상)
-> - 수동 재시작: `launchctl kickstart -k gui/$(id -u)/com.adanbae.supermemory.local`
-> - 중지/해제: `launchctl unload ~/Library/LaunchAgents/com.adanbae.supermemory.local.plist`
+> - 수동 재시작: `launchctl kickstart -k gui/$(id -u)/com.supermemory.local`
+> - 중지/해제: `launchctl unload ~/Library/LaunchAgents/com.supermemory.local.plist`
 
 ### 남은 1단계: Claude Code 플러그인 (인터랙티브 세션에서)
 

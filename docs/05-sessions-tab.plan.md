@@ -6,7 +6,7 @@
 ## 사실 (실측)
 - 과거 세션: `~/.claude/projects/<encoded>/*.jsonl` — 40 프로젝트 / 68 세션 / 1.1GB.
 - jsonl 각 줄 = 이벤트(`type`: user/assistant/system/attachment/ai-title/…). user/assistant만 사용.
-- 각 줄에 **`cwd` 필드 존재**(예: `/Users/adanbae/Dev/php/mobile-web`) → 디렉터리명 디코드(대시 모호) 대신 **cwd로 컨테이너 매핑**.
+- 각 줄에 **`cwd` 필드 존재**(예: `/Users/<you>/Dev/your-project`) → 디렉터리명 디코드(대시 모호) 대신 **cwd로 컨테이너 매핑**.
 - user 라인: `.message.content`가 string(또는 block 배열).
 
 ## 패턴 (기존 코드, 그대로 미러)

@@ -10,6 +10,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const HOME = homedir();
+// .env(레포 루트) 로드 — 설정값 중앙화. 이미 설정된 환경변수가 우선.
+const ENV_FILE = join(process.cwd(), ".env");
+if (existsSync(ENV_FILE)) {
+  for (const line of readFileSync(ENV_FILE, "utf8").split("\n")) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+  }
+}
 // 추출 모델 요건: tool(함수) 호출 지원 + 구조화 JSON 무결성(reasoning 누출 없음).
 // gemma4:e4b 검증됨(tool✅, JSON✅). 대안: llama3.1:8b, mistral-nemo:12b. (Gemma 3·순수 reasoning 모델은 부적합)
 const MODEL = process.env.SM_MODEL || "gemma4:e4b";
@@ -136,13 +144,28 @@ if (apiKey) {
     JSON.stringify({ apiKey, baseUrl: BASE }, null, 2));
   ok("플러그인 프로젝트 설정 작성 (.claude/.supermemory-claude/config.json — gitignore됨)");
 
+  // .env(레포 루트)에 설정 기록 — 값 중앙화(gitignore됨). 이미 있으면 해당 키만 갱신.
+  const envLines = existsSync(ENV_FILE) ? readFileSync(ENV_FILE, "utf8").split("\n").filter((l) => l.trim()) : [];
+  const upsert = (k, v) => {
+    const i = envLines.findIndex((l) => l.startsWith(`${k}=`));
+    if (i >= 0) envLines[i] = `${k}=${v}`; else envLines.push(`${k}=${v}`);
+  };
+  upsert("SM_MODEL", MODEL);
+  upsert("SM_PORT", PORT);
+  upsert("SUPERMEMORY_API_URL", BASE);
+  upsert("SUPERMEMORY_CC_API_KEY", apiKey);
+  if (!envLines.some((l) => l.startsWith("SUPERMEMORY_SKIP_TOOLS="))) upsert("SUPERMEMORY_SKIP_TOOLS", "Bash");
+  writeFileSync(ENV_FILE, envLines.join("\n") + "\n");
+  ok(".env 에 설정 기록 (값 중앙화 · gitignore됨)");
+
+  // ~/.zshrc 는 .env 를 source 하는 1줄만 — 모든 터미널/프로젝트에서 자동 로드
   const zshrc = join(HOME, ".zshrc");
   const marker = "# supermemory-local-kit";
   const cur = existsSync(zshrc) ? readFileSync(zshrc, "utf8") : "";
   if (!cur.includes(marker)) {
-    appendFileSync(zshrc, `\n${marker}\nexport SUPERMEMORY_API_URL="${BASE}"\nexport SUPERMEMORY_CC_API_KEY="${apiKey}"\nexport SUPERMEMORY_SKIP_TOOLS="Bash"\n`);
-    ok("~/.zshrc 에 env 추가 (새 터미널부터 적용)");
-  } else ok("~/.zshrc env 이미 설정됨");
+    appendFileSync(zshrc, `\n${marker}\n[ -f "${ENV_FILE}" ] && set -a && . "${ENV_FILE}" && set +a\n`);
+    ok("~/.zshrc 에 .env source 1줄 추가 (새 터미널부터 적용)");
+  } else ok("~/.zshrc 이미 설정됨 (기존 설정 유지)");
 } else warn(`API 키를 로그에서 못 찾음 — 직접 확인: grep "api key" ${OUT_LOG}`);
 
 // ── 7. Claude Code 플러그인 ─────────────────────────────

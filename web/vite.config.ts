@@ -13,7 +13,7 @@ const pexec = promisify(exec);
 const SUPERMEMORY_URL = process.env.SUPERMEMORY_API_URL || "http://127.0.0.1:6767";
 
 // launchd 에이전트 제어 (UI 서버 제어 패널용)
-const LABEL = "com.adanbae.supermemory.local";
+const LABEL = process.env.SM_LABEL || "com.supermemory.local";
 const PLIST = `${process.env.HOME}/Library/LaunchAgents/${LABEL}.plist`;
 
 async function isLoaded(target: string): Promise<boolean> {

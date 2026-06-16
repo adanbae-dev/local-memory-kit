@@ -199,7 +199,7 @@ cat > ~/Library/LaunchAgents/supermemory.plist << 'EOF'
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>supermemory.local</string>
+  <string>com.supermemory.local</string>
   <key>ProgramArguments</key>
   <array>
     <string>/usr/local/bin/supermemory-server</string>

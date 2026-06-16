@@ -9,8 +9,8 @@
     "dev": "npm --prefix web run dev",
     "build": "npm --prefix web run build",
     "server:status": "curl -s http://localhost:6767/v3/health && echo ' OK' || echo 'DOWN'",
-    "server:restart": "launchctl kickstart -k gui/$(id -u)/com.supermemory.local 2>/dev/null || launchctl kickstart -k gui/$(id -u)/com.adanbae.supermemory.local",
-    "server:stop": "launchctl bootout gui/$(id -u)/com.supermemory.local 2>/dev/null; launchctl bootout gui/$(id -u)/com.adanbae.supermemory.local 2>/dev/null; true"
+    "server:restart": "launchctl kickstart -k gui/$(id -u)/com.supermemory.local",
+    "server:stop": "launchctl bootout gui/$(id -u)/com.supermemory.local 2>/dev/null; true"
   },
   "engines": { "node": ">=18" }
 }
